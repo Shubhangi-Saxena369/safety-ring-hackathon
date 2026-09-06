@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Safety Ring — Sensor Monitor</title>
+<style>
+  :root{
+    --bg: #0B0C10;
+    --panel: #121319;
+    --panel-border: #23252E;
+    --calm: #4DD8C4;
+    --alert: #FF5C4D;
+    --warn: #FFB648;
+    --text: #EDEFF3;
+    --muted: #8A8F9C;
+    --mono: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --metal-1: #4a4d55;
+    --metal-2: #d7d9de;
+    --metal-3: #8b8e96;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background: radial-gradient(ellipse at 50% 0%, #17181f 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 30px 18px 60px;
+  }
+  .wrap{ max-width: 1040px; margin:0 auto; }
+
+  .page-head{ text-align:center; margin-bottom: 8px; }
+  .page-head h1{ font-size: 1.5rem; font-weight: 650; margin:0 0 6px; letter-spacing:-0.01em; }
+  .page-head .sub{ color: var(--muted); font-size: 0.9rem; }
+
+  .hero{
+    position: relative;
+    width: 100%;
+    max-width: 700px;
+    height: 480px;
+    margin: 30px auto 10px;
+  }
+  @media (max-width: 760px){
+    .hero{ display:none; }
+    .mobile-summary{ display:flex !important; }
+  }
+  .mobile-summary{
+    display:none;
+    flex-direction:column;
+    gap:10px;
+    margin: 20px 0 10px;
+  }
+  .mobile-summary .msum-card{
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .mobile-summary .msum-card .mname{ font-size:0.85rem; font-weight:600; }
+  .mobile-summary .msum-card .mval{ font-family:var(--mono); font-size:0.85rem; color:var(--muted); }
+
+  .connectors{ position:absolute; inset:0; width:100%; height:100%; }
+  .connectors line{ stroke: #3a3d47; stroke-width: 1; }
+  .connectors circle.node{ fill: #3a3d47; }
+
+  .ring-graphic{
+    position:absolute;
+    left: 240px; top: 190px;
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    background: conic-gradient(from 200deg, var(--metal-1), var(--metal-2) 25%, var(--metal-3) 45%, var(--metal-1) 65%, var(--metal-2) 85%, var(--metal-1));
+    box-shadow: 0 20px 50px rgba(0,0,0,0.55), inset 0 0 0 2px rgba(255,255,255,0.06);
+  }
+  .ring-graphic::after{
+    content:'';
+    position:absolute;
+    left: 34px; top: 34px;
+    width: 152px; height: 152px;
+    border-radius:50%;
+    background: radial-gradient(ellipse at 40% 30%, #1c1d22, #050506 75%);
+    box-shadow: inset 0 6px 14px rgba(0,0,0,0.7);
+  }
+  .ring-status-pill{
+    position:absolute;
+    left: 50%; top: 190px; transform: translate(-50%, -46px);
+    display:flex; align-items:center; gap:8px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space:nowrap;
+  }
+  .ring-status-pill .dot{ width:9px; height:9px; border-radius:50%; background:var(--calm); box-shadow:0 0 8px var(--calm); }
+  .ring-status-pill .dot.alert{ background:var(--alert); box-shadow:0 0 10px var(--alert); }
+  .ring-status-pill .dot.warn{ background:var(--warn); box-shadow:0 0 10px var(--warn); }
+
+  .float-card{
+    position:absolute;
+    width: 190px;
+    background: rgba(255,255,255,0.045);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(6px);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .float-card .flabel{ font-size: 0.7rem; color: var(--muted); margin-bottom: 3px; }
+  .float-card .fvalue{ font-family: var(--mono); font-size: 1.05rem; font-weight: 600; }
+  .float-card .fnote{ font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+  #cardGSR{ left:20px; top:30px; }
+  #cardACC{ left:0px; top:190px; }
+  #cardTAMPER{ left:20px; top:350px; }
+  #cardPPG{ right:20px; top:30px; }
+  #cardTRIGGER{ right:0px; top:190px; }
+  #cardPHASE{ right:20px; top:350px; }
+
+  .scenarios{
+    display:flex; gap:10px; flex-wrap:wrap;
+    justify-content:center;
+    margin: 10px 0 30px;
+  }
+  .scenario-btn{
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    padding: 11px 16px;
+    border-radius: 8px;
+    font-size: 0.86rem;
+    cursor:pointer;
+    text-align:left;
+    line-height:1.3;
+    transition: border-color 0.15s ease;
+  }
+  .scenario-btn:hover{ border-color:#3a4152; }
+  .scenario-btn.active{ border-color: var(--calm); background:#0e1a19; }
+  .scenario-btn.active[data-tone="alert"]{ border-color: var(--alert); background:#1c1211; }
+  .scenario-btn.active[data-tone="warn"]{ border-color: var(--warn); background:#1c1710; }
+  .scenario-btn .name{ display:block; font-weight:600; margin-bottom:2px; }
+  .scenario-btn .hint{ display:block; color: var(--muted); font-size:0.76rem; }
+
+  .monitor{
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+  }
+  .monitor-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom: 8px; }
+  .monitor-name{ font-size: 0.85rem; font-weight:600; }
+  .monitor-name .sensor-type{ color: var(--muted); font-weight: 400; font-size: 0.78rem; margin-left:6px; }
+  .monitor-reading{ font-family: var(--mono); font-size: 1.4rem; font-weight: 600; }
+  .monitor-reading .unit{ font-size: 0.7rem; color: var(--muted); font-weight:400; margin-left:4px; }
+  .monitor canvas{ width:100%; height: 74px; display:block; border-radius: 6px; }
+  .monitor-note{ font-family: var(--mono); font-size: 0.72rem; color: var(--muted); margin-top: 6px; }
+
+  .timeline{
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 18px;
+    margin-top: 6px;
+  }
+  .timeline h2{ font-size: 0.88rem; font-weight:600; margin: 0 0 14px; }
+  .phases{ display:flex; gap:8px; }
+  .phase{ flex:1; text-align:center; padding: 11px 6px; border-radius: 8px; background:#171b24; border: 1px solid var(--panel-border); transition: all 0.2s ease; }
+  .phase .plabel{ font-family: var(--mono); font-size:0.68rem; color: var(--muted); margin-bottom:3px; }
+  .phase .pname{ font-size: 0.78rem; font-weight:600; }
+  .phase.done{ background:#0e1a19; border-color: var(--calm); }
+  .phase.done .pname{ color: var(--calm); }
+  .phase.done-alert{ background:#1c1211; border-color: var(--alert); }
+  .phase.done-alert .pname{ color: var(--alert); }
+  .phase.done-warn{ background:#1c1710; border-color: var(--warn); }
+  .phase.done-warn .pname{ color: var(--warn); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <h1>Continuous safety monitoring</h1>
+    <div class="sub">Select a scenario to see how the ring's sensors respond.</div>
+  </div>
+
+  <div class="hero">
+    <svg class="connectors" viewBox="0 0 700 480">
+      <line x1="300" y1="240" x2="210" y2="72"/>
+      <line x1="240" y1="300" x2="190" y2="232"/>
+      <line x1="300" y1="365" x2="210" y2="392"/>
+      <line x1="400" y1="240" x2="490" y2="72"/>
+      <line x1="460" y1="300" x2="510" y2="232"/>
+      <line x1="400" y1="365" x2="490" y2="392"/>
+      <circle class="node" cx="300" cy="240" r="3"/>
+      <circle class="node" cx="240" cy="300" r="3"/>
+      <circle class="node" cx="300" cy="365" r="3"/>
+      <circle class="node" cx="400" cy="240" r="3"/>
+      <circle class="node" cx="460" cy="300" r="3"/>
+      <circle class="node" cx="400" cy="365" r="3"/>
+    </svg>
+
+    <div class="ring-graphic"></div>
+    <div class="ring-status-pill"><span class="dot" id="pillDot"></span><span id="pillLabel">Monitoring</span></div>
+
+    <div class="float-card" id="cardGSR">
+      <div class="flabel">Skin response (GSR)</div>
+      <div class="fvalue"><span id="hGsr">2.1</span> µS</div>
+      <div class="fnote" id="hGsrNote">Stable</div>
+    </div>
+    <div class="float-card" id="cardACC">
+      <div class="flabel">Motion (Accelerometer)</div>
+      <div class="fvalue"><span id="hAcc">1.0</span> g</div>
+      <div class="fnote" id="hAccNote">Rhythmic gait</div>
+    </div>
+    <div class="float-card" id="cardTAMPER">
+      <div class="flabel">Ring integrity</div>
+      <div class="fvalue" id="hTamper">Intact</div>
+      <div class="fnote" id="hTamperNote">Loop closed</div>
+    </div>
+    <div class="float-card" id="cardPPG">
+      <div class="flabel">Heart rate (PPG)</div>
+      <div class="fvalue"><span id="hPpg">78</span> bpm</div>
+      <div class="fnote" id="hPpgNote">Resting range</div>
+    </div>
+    <div class="float-card" id="cardTRIGGER">
+      <div class="flabel">Trigger mode</div>
+      <div class="fvalue" id="hTrigger">Standby</div>
+      <div class="fnote" id="hTriggerNote">No trigger active</div>
+    </div>
+    <div class="float-card" id="cardPHASE">
+      <div class="flabel">Escalation phase</div>
+      <div class="fvalue" id="hPhase">0 / 3</div>
+      <div class="fnote" id="hPhaseNote">Not triggered</div>
+    </div>
+  </div>
+
+  <div class="mobile-summary" id="mobileSummary"></div>
+
+  <div class="scenarios" id="scenarioButtons"></div>
+
+  <div class="monitor">
+    <div class="monitor-head">
+      <div class="monitor-name">Skin conductance<span class="sensor-type">GSR</span></div>
+      <div class="monitor-reading"><span id="gsrValue">2.1</span><span class="unit">µS</span></div>
+    </div>
+    <canvas id="gsrCanvas"></canvas>
+    <div class="monitor-note" id="gsrNote">Stable — no sweat spike</div>
+  </div>
+
+  <div class="monitor">
+    <div class="monitor-head">
+      <div class="monitor-name">Heart rate<span class="sensor-type">PPG</span></div>
+      <div class="monitor-reading"><span id="ppgValue">78</span><span class="unit">bpm</span></div>
+    </div>
+    <canvas id="ppgCanvas"></canvas>
+    <div class="monitor-note" id="ppgNote">Smooth, predictable rhythm</div>
+  </div>
+
+  <div class="monitor">
+    <div class="monitor-head">
+      <div class="monitor-name">Motion<span class="sensor-type">3D Accelerometer</span></div>
+      <div class="monitor-reading"><span id="accValue">1.0</span><span class="unit">g (jerk index)</span></div>
+    </div>
+    <canvas id="accCanvas"></canvas>
+    <div class="monitor-note" id="accNote">Rhythmic gait pattern</div>
+  </div>
+
+  <div class="timeline">
+    <h2>Escalation protocol</h2>
+    <div class="phases" id="phaseList">
+      <div class="phase" data-phase="1"><div class="plabel">0s</div><div class="pname">Record + GPS lock</div></div>
+      <div class="phase" data-phase="2"><div class="plabel">5s</div><div class="pname">Family alert</div></div>
+      <div class="phase" data-phase="3"><div class="plabel">10s</div><div class="pname">Police dispatch (ERSS-112)</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const scenarios = [
+  {
+    id:'idle', name:'Walking home, no threat', hint:'Baseline monitoring', tone:'calm',
+    gsr:{level:0.15, jitter:0.02, note:'Stable — no sweat spike', value:()=> (2.0+Math.random()*0.2).toFixed(1)},
+    ppg:{bpm:78, jitter:0.03, note:'Smooth, predictable rhythm', value:()=>78+Math.round(Math.random()*3)},
+    acc:{mode:'walk', note:'Rhythmic gait pattern', value:()=>'1.0'},
+    tamper:false, phasesReached:0, trigger:'Standby', triggerNote:'No trigger active'
+  },
+  {
+    id:'manual', name:'Notices someone following', hint:'Manual tap trigger', tone:'warn',
+    gsr:{level:0.35, jitter:0.03, note:'Elevated but not spiking', value:()=>(3.2+Math.random()*0.3).toFixed(1)},
+    ppg:{bpm:95, jitter:0.04, note:'Anxious, not distressed', value:()=>93+Math.round(Math.random()*4)},
+    acc:{mode:'walk', note:'Normal walking pace', value:()=>'1.1'},
+    tamper:false, phasesReached:3, trigger:'Manual tap', triggerNote:'User-initiated pattern'
+  },
+  {
+    id:'ambush', name:'Sudden physical assault', hint:'AI passive detection', tone:'alert',
+    gsr:{level:0.9, jitter:0.08, note:'Sharp spike — sudden fear', value:()=>(7.8+Math.random()*0.6).toFixed(1)},
+    ppg:{bpm:162, jitter:0.08, note:'Abnormal acceleration', value:()=>158+Math.round(Math.random()*8)},
+    acc:{mode:'chaos', note:'Chaotic, jerky motion', value:()=>(2.8+Math.random()*0.6).toFixed(1)},
+    tamper:false, phasesReached:3, trigger:'AI detected', triggerNote:'Sensor fusion match'
+  },
+  {
+    id:'tamper', name:'Attacker rips off the ring', hint:'Tamper detection triggers', tone:'alert',
+    gsr:{level:0.9, jitter:0.08, note:'Spiking before disconnect', value:()=>(7.5+Math.random()*0.6).toFixed(1)},
+    ppg:{bpm:158, jitter:0.08, note:'Spiking before disconnect', value:()=>155+Math.round(Math.random()*8)},
+    acc:{mode:'chaos', note:'Violent motion before disconnect', value:()=>(3.0+Math.random()*0.6).toFixed(1)},
+    tamper:true, phasesReached:3, trigger:'Dead man\u2019s switch', triggerNote:'Loop broken'
+  }
+];
+
+let current = scenarios[0];
+let t = 0;
+
+function setupCanvas(canvas){
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, w: rect.width, h: rect.height };
+}
+
+const gsrCanvas = document.getElementById('gsrCanvas');
+const ppgCanvas = document.getElementById('ppgCanvas');
+const accCanvas = document.getElementById('accCanvas');
+let gsrCtx, ppgCtx, accCtx, W;
+function resizeAll(){
+  ({ctx:gsrCtx, w:W} = setupCanvas(gsrCanvas));
+  ({ctx:ppgCtx} = setupCanvas(ppgCanvas));
+  ({ctx:accCtx} = setupCanvas(accCanvas));
+}
+window.addEventListener('resize', resizeAll);
+
+const N = 160;
+let gsrBuf = new Array(N).fill(0);
+let ppgBuf = new Array(N).fill(0);
+let accBuf = new Array(N).fill(0);
+
+function drawTrace(ctx, buf, color, h){
+  ctx.clearRect(0,0, ctx.canvas.width, ctx.canvas.height);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  const stepX = W / (N-1);
+  buf.forEach((v,i)=>{
+    const x = i*stepX;
+    const y = h/2 - v*(h*0.42);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+}
+
+let gsrLevel = 0.15, ppgPhase = 0, accPhase = 0;
+
+function step(){
+  t += 1;
+  const tone = current.tone;
+  const traceColor = tone==='alert' ? getComputedStyle(document.documentElement).getPropertyValue('--alert')
+                    : tone==='warn' ? getComputedStyle(document.documentElement).getPropertyValue('--warn')
+                    : getComputedStyle(document.documentElement).getPropertyValue('--calm');
+
+  const gTarget = current.gsr.level;
+  gsrLevel += (gTarget - gsrLevel) * 0.03;
+  const gVal = gsrLevel + (Math.random()-0.5)*current.gsr.jitter;
+  gsrBuf.push(gVal); gsrBuf.shift();
+  drawTrace(gsrCtx, gsrBuf, traceColor, 74);
+
+  const beatInterval = 60 / current.ppg.bpm * 12;
+  const phaseInBeat = ppgPhase % beatInterval;
+  let pVal = 0;
+  if(phaseInBeat < 1.5){ pVal = 1.0; }
+  else if(phaseInBeat < 3){ pVal = -0.3; }
+  else { pVal = Math.sin(phaseInBeat*0.3)*0.05; }
+  pVal += (Math.random()-0.5)*current.ppg.jitter;
+  ppgPhase += 1;
+  ppgBuf.push(pVal); ppgBuf.shift();
+  drawTrace(ppgCtx, ppgBuf, traceColor, 74);
+
+  let aVal;
+  if(current.acc.mode === 'walk'){ accPhase += 0.15; aVal = Math.sin(accPhase) * 0.5; }
+  else { aVal = (Math.random()-0.5) * 1.8; }
+  accBuf.push(aVal); accBuf.shift();
+  drawTrace(accCtx, accBuf, traceColor, 74);
+
+  if(t % 8 === 0){
+    const gsrV = current.gsr.value();
+    const ppgV = current.ppg.value();
+    const accV = current.acc.value();
+    document.getElementById('gsrValue').textContent = gsrV;
+    document.getElementById('ppgValue').textContent = ppgV;
+    document.getElementById('accValue').textContent = accV;
+    document.getElementById('hGsr').textContent = gsrV;
+    document.getElementById('hPpg').textContent = ppgV;
+    document.getElementById('hAcc').textContent = accV;
+  }
+  requestAnimationFrame(step);
+}
+
+const btnWrap = document.getElementById('scenarioButtons');
+const phaseEls = document.querySelectorAll('.phase');
+const pillDot = document.getElementById('pillDot');
+const pillLabel = document.getElementById('pillLabel');
+const mobileSummary = document.getElementById('mobileSummary');
+
+function applyScenario(s){
+  current = s;
+  document.querySelectorAll('.scenario-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.id === s.id);
+  });
+
+  pillDot.className = 'dot' + (s.tone==='alert' ? ' alert' : s.tone==='warn' ? ' warn' : '');
+  pillLabel.textContent = s.tone==='alert' ? 'Alert triggered' : s.tone==='warn' ? 'Manual trigger active' : 'Monitoring';
+
+  document.getElementById('gsrNote').textContent = s.gsr.note;
+  document.getElementById('ppgNote').textContent = s.ppg.note;
+  document.getElementById('accNote').textContent = s.acc.note;
+  document.getElementById('hGsrNote').textContent = s.gsr.note;
+  document.getElementById('hPpgNote').textContent = s.ppg.note;
+  document.getElementById('hAccNote').textContent = s.acc.note;
+
+  document.getElementById('hTamper').textContent = s.tamper ? 'Broken' : 'Intact';
+  document.getElementById('hTamperNote').textContent = s.tamper ? 'Loop broken — max alert' : 'Loop closed';
+
+  document.getElementById('hTrigger').textContent = s.trigger;
+  document.getElementById('hTriggerNote').textContent = s.triggerNote;
+
+  document.getElementById('hPhase').textContent = s.phasesReached + ' / 3';
+  document.getElementById('hPhaseNote').textContent = s.phasesReached === 0 ? 'Not triggered' : 'Escalation running';
+
+  phaseEls.forEach(el=>{
+    const p = parseInt(el.dataset.phase,10);
+    el.classList.remove('done','done-alert','done-warn');
+    if(p <= s.phasesReached){
+      if(s.tone==='alert') el.classList.add('done-alert');
+      else if(s.tone==='warn') el.classList.add('done-warn');
+      else el.classList.add('done');
+    }
+  });
+
+  mobileSummary.innerHTML = `
+    <div class="msum-card"><span class="mname">GSR</span><span class="mval">${document.getElementById('hGsr').textContent} µS — ${s.gsr.note}</span></div>
+    <div class="msum-card"><span class="mname">Heart rate</span><span class="mval">${document.getElementById('hPpg').textContent} bpm — ${s.ppg.note}</span></div>
+    <div class="msum-card"><span class="mname">Motion</span><span class="mval">${document.getElementById('hAcc').textContent} g — ${s.acc.note}</span></div>
+    <div class="msum-card"><span class="mname">Ring integrity</span><span class="mval">${s.tamper ? 'Broken' : 'Intact'}</span></div>
+    <div class="msum-card"><span class="mname">Trigger</span><span class="mval">${s.trigger}</span></div>
+    <div class="msum-card"><span class="mname">Escalation phase</span><span class="mval">${s.phasesReached} / 3</span></div>
+  `;
+}
+
+scenarios.forEach((s)=>{
+  const btn = document.createElement('button');
+  btn.className = 'scenario-btn';
+  btn.dataset.id = s.id;
+  btn.dataset.tone = s.tone;
+  btn.innerHTML = `<span class="name">${s.name}</span><span class="hint">${s.hint}</span>`;
+  btn.addEventListener('click', ()=>applyScenario(s));
+  btnWrap.appendChild(btn);
+});
+
+resizeAll();
+applyScenario(scenarios[0]);
+requestAnimationFrame(step);
+</script>
+</body>
+</html>
